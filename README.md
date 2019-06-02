@@ -4,7 +4,7 @@
 
 autolrn is a humble bunch of small experiments glued together with the ambitious aim of **full automation**, and as such, it's a real mini-framework. The classification module features six sub-modules to preprocess data, train, calibrate, save models and make predictions. The regression module is less rich, but features sub-modules to evaluate and train models - you can complete it by copying code from the classification module.
 
-autolrn keeps an eye on **feature engineering**, so classification methods have been developed to train-test-split data, automatically establish a classification metric - 'roc_auc' vs 'log_loss_score' - based on binary or multiclass target type and get class labels for you to inject your custom hacks without the risk of data leakage from test to train set before Label/One-Hot encoding them separately. 
+autolrn keeps an eye on **feature engineering**, so classification methods have been developed to train-test-split data, automatically establish a classification metric - 'roc_auc' vs 'log_loss_score' - based on binary or multiclass target type and get class labels for you to inject your custom hacks without the risk of data leakage from test to train set before Label/One-Hot encoding them separately.
 
 Regression methods allow you to quickly select whether to label-encode or one-hot encode data for model evaluation with vanilla cross-validation, non-nested RSCV and nested RSCV. You can test the best model accordingly.
 
@@ -41,7 +41,7 @@ You can go and find pickled models in folder "examples" to make predictions with
 
 autolrn's classification module classifies **small and medium datasets** -- from 100 up to 1,000,000 samples -- and makes use of sklearn's jobs to parallelize calculations.
 
-1. Load data as a pandas dataframe, 
+1. Load data as a pandas dataframe,
 
    ```python
    import pandas as pd
@@ -88,7 +88,7 @@ autolrn's classification module classifies **small and medium datasets** -- from
 
 1. do your custom feature engineering,
 
-1. automatically (Label / One-Hot) encode subsets and include them into a single dict, 
+1. automatically (Label / One-Hot) encode subsets and include them into a single dict,
 
    ```python
    auto_feat_eng_data = eu.auto_X_encoding(sltt, seed)
@@ -149,13 +149,13 @@ autolrn's classification module classifies **small and medium datasets** -- from
 
 ## How to use autolrn's regression module
 
-autolrn's regression module can run regressions upon **small and medium datasets** -- from 100 up to 1,000,000 samples -- and makes use of sklearn's jobs to parallelize calculations. 
+autolrn's regression module can run regressions upon **small and medium datasets** -- from 100 up to 1,000,000 samples -- and makes use of sklearn's jobs to parallelize calculations.
 
 1. Load data as a pandas dataframe,
 
    ```python
    df = read_csv(
-        "/datasets/rossman_store_train.csv", delimiter=",", 
+        "/datasets/rossman_store_train.csv", delimiter=",",
         parse_dates=['Date'],
         dtype={"StateHoliday": "category"})
    ```
@@ -199,10 +199,10 @@ autolrn's regression module can run regressions upon **small and medium datasets
 
       ```python
       from sklearn.model_selection import TimeSeriesSplit
-      tscv = TimeSeriesSplit(n_splits=2)
+      tscv = TimeSeriesSplit(n_splits=5)
 
       best_attr = eu.evaluate_regressor(
-          'DummyReg', DummyRegressor(strategy="median"), 
+          'DummyReg', DummyRegressor(strategy="median"),
           X_train, y_train, tscv, scoring, best_attr, time_dep=True)
       ```
 
@@ -219,10 +219,10 @@ autolrn's regression module can run regressions upon **small and medium datasets
 
       ```python
       best_model_name, _ , _ , _ = eu.get_best_regressor_attributes(
-        X_train, y_train, estimators, best_attr, scoring, 
+        X_train, y_train, estimators, best_attr, scoring,
         refit=refit, nested_cv=nested_cv,
         cv=tscv, time_dep=True, random_state=seed)
-      ``` 
+      ```
 
 3. train and test the best estimator
 
@@ -231,14 +231,14 @@ autolrn's regression module can run regressions upon **small and medium datasets
 
    tr.train_test_process(
       best_model_name, estimators, X_train, X_test, y_train, y_test,
-      y_scaler=tgt_scaler, tuning=tuning, cv=tscv, scoring='r2', 
+      y_scaler=tgt_scaler, tuning=tuning, cv=tscv, scoring='r2',
       random_state=seed)
    ```
 
 
 ## DISCLAIMER
 
-autolrn's classification module - which you can download separately as [autoclf](https://github.com/SimonCarozza/autoclf) - is born out of the simple need of **trying out sklearn's and Keras' features**, and as such, it's full of hacks and uses processes that could be replaced with faster solutions. 
+autolrn's classification module - which you can download separately as [autoclf](https://github.com/SimonCarozza/autoclf) - is born out of the simple need of **trying out sklearn's and Keras' features**, and as such, it's full of hacks and uses processes that could be replaced with faster solutions.
 
 autolrn's regression module follows the same philosophy, but performs less tasks more quickly. On the other hand, you can use it to get a taste of time-series analysis.
 
