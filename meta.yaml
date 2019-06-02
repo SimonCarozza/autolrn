@@ -1,0 +1,24 @@
+package:
+  name: autolrn
+  version: "0.1.0"
+
+source:
+  git_url: https://simoneci@bitbucket.org/simoneci/auto_learn.git
+
+requirements:
+  build:
+    - python 3.6
+    - setuptools
+  run:
+    - python 3.6
+    - numpy {{ numpy }}
+    - scikit-learn
+    - keras
+    - matplotlib {{ matplotlib }}
+    - pandas
+    - py-xgboost 0.80
+
+about:
+  home: https://bitbucket.org/simoneci/auto_learn/
+  license: MIT License
+  license_file: LICENSE

@@ -1,0 +1,4 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+sf_crime_train.csv filter=lfs diff=lfs merge=lfs -text
+imb_credit_train.csv filter=lfs diff=lfs merge=lfs -text
