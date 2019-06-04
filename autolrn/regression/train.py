@@ -13,20 +13,20 @@ from sklearn.base import is_regressor
 
 
 def train_test_process(
-    best_model_name, estimators, 
-    X_train, X_test, y_train, y_test, 
+    best_model_name, estimators,
+    X_train, X_test, y_train, y_test,
     y_scaler=None, tuning='rscv', cv=3, n_iter=10, nb_epoch=100,
     scoring='r2', random_state=0):
-       
+
     if best_model_name not in ('Worst', 'DummyReg'):
         # test best model/estimator
         best_model = estimators[
-            'SVMReg' if best_model_name=='Bagging_SVMReg' else 
+            'SVMReg' if best_model_name=='Bagging_SVMReg' else
             best_model_name][0]
         params=None
         try:
             estimators[
-                'SVMReg' if best_model_name=='Bagging_SVMReg' else 
+                'SVMReg' if best_model_name=='Bagging_SVMReg' else
                 best_model_name][1]
         except KeyError as ke:
             if best_model_name == "PolynomialRidgeReg":
@@ -43,13 +43,14 @@ def train_test_process(
         except Exception as e:
             raise e
         else:
-            if tuning=='rscv':
-                params = estimators['SVMReg' if best_model_name=='Bagging_SVMReg' else 
-                best_model_name][1]
+            if tuning == 'rscv':
+                params = estimators[
+                    'SVMReg' if best_model_name == 'Bagging_SVMReg' else
+                    best_model_name][1]
 
         train_test_estimator(
             best_model_name, best_model, X_train, X_test, y_train, y_test,
-            y_scaler=y_scaler, params=params, tuning=tuning, cv=cv, 
+            y_scaler=y_scaler, params=params, tuning=tuning, cv=cv,
             n_iter=n_iter, scoring=scoring, random_state=random_state)
     else:
         print("Unable to find a 'good-enough' regressor.")
@@ -57,12 +58,12 @@ def train_test_process(
 
 
 def train_test_estimator(
-        best_model_name, best_model, X_train, X_test, y_train, y_test, 
+        best_model_name, best_model, X_train, X_test, y_train, y_test,
         y_scaler=None, params=None, tuning=None, cv=3, n_iter=10,
-        nb_epoch=100, scoring=None, random_state=0, timeseries=False):		
+        nb_epoch=100, scoring=None, random_state=0, timeseries=False):
     """
     Tests optimized or plain estimator [needs refactorization]
-    
+
     ----------------------------------
     """
     print()
@@ -76,8 +77,8 @@ def train_test_estimator(
     if best_model_name != "Worst":
         if timeseries:
             if isinstance(cv, TimeSeriesSplit):
-                if not is_regressor(estimator):
-                    if not isinstance(estimator, KerasRegressor):
+                if not is_regressor(best_model):
+                    if not isinstance(best_model, KerasRegressor):
                         raise TypeError(
                             "non-sklearn regressor should be of type KerasRegressor")
             else:
@@ -109,7 +110,7 @@ def train_test_estimator(
                 input_dim = int(X_train.shape[1])
 
                 best_model, params = create_best_keras_reg_architecture(
-                    best_model_name, input_dim, best_model.get_params()['nb_epoch'], 
+                    best_model_name, input_dim, best_model.get_params()['nb_epoch'],
                     pgd.Keras_param_grid)
 
                 if tuning == 'rscv':
@@ -119,7 +120,11 @@ def train_test_estimator(
 
             elif best_model_name == "PolynomialRidgeReg":
 
-                poly_features = PolynomialFeatures(degree=5, interaction_only=True)
+                interact_only=False
+                if X_train.shape[0] > 100000:
+                    interact_only=True
+                poly_features = PolynomialFeatures(
+                    degree=5, interaction_only=interact_only)
                 X_train = poly_features.fit_transform(X_train)
                 X_test = poly_features.transform(X_test)
 
@@ -151,9 +156,9 @@ def train_test_estimator(
             # input("press key...")
             try:
                 estimator = RandomizedSearchCV(
-                    ppl, param_distributions=params, cv=cv, iid=False, 
-                    n_iter=n_iter, n_jobs=-2, pre_dispatch="2*n_jobs", scoring=scoring, 
-                    refit=True, random_state=random_state, error_score=np.nan)	
+                    ppl, param_distributions=params, cv=cv, iid=False,
+                    n_iter=n_iter, n_jobs=-2, pre_dispatch="2*n_jobs", scoring=scoring,
+                    refit=True, random_state=random_state, error_score=np.nan)
             except TypeError as te:
                 print(te)
             except Exception as e:
