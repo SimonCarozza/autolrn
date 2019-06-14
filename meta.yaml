@@ -8,7 +8,6 @@ source:
 requirements:
   build:
     - python 3.6
-    - numpy {{ numpy }}
     - setuptools
   run:
     - python 3.6
