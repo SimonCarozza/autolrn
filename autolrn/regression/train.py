@@ -13,20 +13,20 @@ from sklearn.base import is_regressor
 
 
 def train_test_process(
-    best_model_name, estimators,
-    X_train, X_test, y_train, y_test,
+    best_model_name, estimators, 
+    X_train, X_test, y_train, y_test, 
     y_scaler=None, tuning='rscv', cv=3, n_iter=10, nb_epoch=100,
     scoring='r2', random_state=0):
-
+       
     if best_model_name not in ('Worst', 'DummyReg'):
         # test best model/estimator
         best_model = estimators[
-            'SVMReg' if best_model_name=='Bagging_SVMReg' else
+            'SVMReg' if best_model_name=='Bagging_SVMReg' else 
             best_model_name][0]
         params=None
         try:
             estimators[
-                'SVMReg' if best_model_name=='Bagging_SVMReg' else
+                'SVMReg' if best_model_name=='Bagging_SVMReg' else 
                 best_model_name][1]
         except KeyError as ke:
             if best_model_name == "PolynomialRidgeReg":
@@ -43,14 +43,14 @@ def train_test_process(
         except Exception as e:
             raise e
         else:
-            if tuning == 'rscv':
+            if tuning=='rscv':
                 params = estimators[
-                    'SVMReg' if best_model_name == 'Bagging_SVMReg' else
-                    best_model_name][1]
+                'SVMReg' if best_model_name=='Bagging_SVMReg' else 
+                best_model_name][1]
 
         train_test_estimator(
             best_model_name, best_model, X_train, X_test, y_train, y_test,
-            y_scaler=y_scaler, params=params, tuning=tuning, cv=cv,
+            y_scaler=y_scaler, params=params, tuning=tuning, cv=cv, 
             n_iter=n_iter, scoring=scoring, random_state=random_state)
     else:
         print("Unable to find a 'good-enough' regressor.")
@@ -58,12 +58,12 @@ def train_test_process(
 
 
 def train_test_estimator(
-        best_model_name, best_model, X_train, X_test, y_train, y_test,
+        best_model_name, best_model, X_train, X_test, y_train, y_test, 
         y_scaler=None, params=None, tuning=None, cv=3, n_iter=10,
         nb_epoch=100, scoring=None, random_state=0, timeseries=False):
     """
     Tests optimized or plain estimator [needs refactorization]
-
+    
     ----------------------------------
     """
     print()
@@ -110,7 +110,7 @@ def train_test_estimator(
                 input_dim = int(X_train.shape[1])
 
                 best_model, params = create_best_keras_reg_architecture(
-                    best_model_name, input_dim, best_model.get_params()['nb_epoch'],
+                    best_model_name, input_dim, best_model.get_params()['nb_epoch'], 
                     pgd.Keras_param_grid)
 
                 if tuning == 'rscv':
@@ -131,8 +131,9 @@ def train_test_estimator(
             else:
                 pass
 
+        # # n_jobs=-2 to avoid burdening your PC
         if hasattr(best_model, 'n_jobs'):
-            best_model.set_params(n_jobs=-2)
+            best_model.set_params(n_jobs=-1)
 
         if tuning is None and params is not None:
             print("Parameters are useless for testing default/optimized model.")
@@ -150,15 +151,16 @@ def train_test_estimator(
             # check params is a dict w tuples (model, distro_params)
             print("Find best params of %s w RSCV and refit it..." % best_model_name)
             # for k, v in params.items():
-            # 	print("\t", k)
+            #     print("\t", k)
             ppl = Pipeline([(best_model_name.lstrip("Polynomial"), best_model)])
             # print(ppl.get_params().keys())
             # input("press key...")
             try:
+                # n_jobs=-2 to avoid burdening your PC
                 estimator = RandomizedSearchCV(
-                    ppl, param_distributions=params, cv=cv, iid=False,
-                    n_iter=n_iter, n_jobs=-2, pre_dispatch="2*n_jobs", scoring=scoring,
-                    refit=True, random_state=random_state, error_score=np.nan)
+                    ppl, param_distributions=params, cv=cv, iid=False, 
+                    n_iter=n_iter, n_jobs=-1, pre_dispatch="2*n_jobs", scoring=scoring, 
+                    refit=True, random_state=random_state, error_score=np.nan)  
             except TypeError as te:
                 print(te)
             except Exception as e:
@@ -194,8 +196,6 @@ def train_test_estimator(
                     rmse = np.sqrt(mean_squared_error(y_train, best_oob_prediction))
                     print("%s oob_predictions' MSE [%.2f] and RMSE [%.2f] on train data." % (
                         best_model_name, mse, rmse))
-                    r2 = r2_score(y_test, predicted)
-                    print("R2 oob_score on test data: %.2f" % (r2))
                 if hasattr(best_regressor, 'oob_score_'):
                     best_oob_score = best_regressor.oob_score_
                     print("oob_score [%s] of refitted ensemble on train data: %1.3f" % (

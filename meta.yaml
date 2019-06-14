@@ -1,6 +1,6 @@
 package:
   name: autolrn
-  version: "0.1.0"
+  version: "0.1.2"
 
 source:
   git_url: https://simoneci@bitbucket.org/simoneci/auto_learn.git
@@ -8,6 +8,7 @@ source:
 requirements:
   build:
     - python 3.6
+    - numpy {{ numpy }}
     - setuptools
   run:
     - python 3.6
