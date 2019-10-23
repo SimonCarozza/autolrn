@@ -1,10 +1,8 @@
 """Hyperparameter grids and distros for GridSearchCV and RandomizedSearchCV."""
 
 # from sklearn.linear_model import LinearRegression
-from sklearn.linear_model import Ridge  # alpha
-# from sklearn.linear_model import LassoLarsCV
+from sklearn.linear_model import Lasso, Ridge  # alpha
 from sklearn.linear_model import ElasticNet
-from sklearn.linear_model import BayesianRidge, ARDRegression
 
 # PolynomialFeatures ...
 
@@ -55,32 +53,26 @@ Rdg_param_distro = dict(
     RidgeReg__alpha=sp_exp(scale=10)
 )
 
-# BayesianRidge , ARD Bayes
-
-BYR_gscv_param_grid = dict(
-    BayesRidgeReg__tol=[0.0001, 0.001, 0.01, 0.1, 1],
-    # BayesRidgeReg__alpha1=[1e-8, 1e-7, 1e-6, 1e-5, 1e-4]
-    # BayesRidgeReg__alpha2=[1e-8, 1e-7, 1e-6, 1e-5, 1e-4]
+# Lasso
+Lso_gscv_param_grid = dict(
+    LassoReg__alpha=[.001, .01, .1, 0.5, 1.]
 )
 
-BYR_param_distro = dict(
-    BayesRidgeReg__tol=sp_exp(scale=1)
-)
-
-ARD_param_distro = dict(
-    ARDBayesReg__tol=BYR_param_distro["BayesRidgeReg__tol"]
+Lso_param_distro = dict(
+    LassoReg__alpha=sp_exp(scale=1)
 )
 
 # ElasticNet
 
 EN_gscv_param_grid = dict(
-    ElasticNetReg__l1_ratio=[.1, .5, .7, .9, .95, .99, 1]
+    ElasticNetReg__alpha=[.1, 0.5, 1., 5., 10.],
+    ElasticNetReg__l1_ratio=[.05, .1, .5, .7, .9, .95]
 )
 
 EN_param_distro = dict(
+    ElasticNetReg__alpha=EN_gscv_param_grid["ElasticNetReg__alpha"],
     ElasticNetReg__l1_ratio=sp_exp(scale=1)
 )
-
 
 # KNeighborsReg
 
@@ -221,14 +213,14 @@ for n in np.arange(0, 3):
 
 ###
 
-# 'DummyReg' initialized at run-time, 'ARDBayesReg' slow af.
+# 'DummyReg' initialized at run-time
 
 full_search_models_and_parameters = {
     'RidgeReg': (Ridge(), Rdg_param_distro),
-    # 'ARDBayesReg': (ARDRegression(), ARD_param_distro),
+    'LassoReg': (Lasso(), Lso_param_distro),
     'ElasticNetReg': (ElasticNet(), EN_param_distro),
-    'KNeighborsReg': (
-        KNeighborsRegressor(n_neighbors=10), KNR_param_distro),
+    # 'KNeighborsReg': (
+    #     KNeighborsRegressor(n_neighbors=10), KNR_param_distro),
     'RandomForestReg': (
         RandomForestRegressor(
             random_state=seed, n_estimators=100, 
@@ -256,7 +248,7 @@ full_search_models_and_parameters = {
             random_state=seed), 
             GBR_param_distro),
     'LinearSVMReg': (LinearSVR(max_iter=1e4), LinSVR_param_distro),
-    # 'SVMReg': (SVR(kernel='rbf', gamma='scale'), SVR_param_distro)
+    # # 'SVMReg': (SVR(kernel='rbf', gamma='scale'), SVR_param_distro)
 }
 
 if xgb_import:

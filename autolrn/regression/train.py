@@ -4,20 +4,24 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import TimeSeriesSplit,RandomizedSearchCV
 from sklearn.utils import check_array
-from sklearn.metrics import mean_squared_error, explained_variance_score, r2_score
+from sklearn import metrics as me
 from time import time
 import numpy as np
 from . import param_grids_distros as pgd
+from . import r_eval_utils as reu
 from scipy.stats import randint as sp_randint
 from sklearn.base import is_regressor
 
 
 def train_test_process(
-    best_model_name, estimators, 
-    X_train, X_test, y_train, y_test, 
-    y_scaler=None, tuning='rscv', cv=3, n_iter=10, nb_epoch=100,
-    scoring='r2', random_state=0):
+    best_model_name, estimators, X_train, X_test, y_train, y_test, 
+    scaler=None, y_scaler=None, feat_selector=None, tuning='rscv', cv=3, 
+    n_iter=10, nb_epoch=100, scoring='r2', random_state=0, time_dep=False, 
+    test_phase=True, d_name=None):
+
+    tested = True
        
+    # should check best model is in list of valid models...
     if best_model_name not in ('Worst', 'DummyReg'):
         # test best model/estimator
         best_model = estimators[
@@ -48,171 +52,223 @@ def train_test_process(
                 'SVMReg' if best_model_name=='Bagging_SVMReg' else 
                 best_model_name][1]
 
-        train_test_estimator(
+        tested, _ =  train_test_estimator(
             best_model_name, best_model, X_train, X_test, y_train, y_test,
-            y_scaler=y_scaler, params=params, tuning=tuning, cv=cv, 
-            n_iter=n_iter, scoring=scoring, random_state=random_state)
+            scaler=scaler, feat_selector=feat_selector, y_scaler=y_scaler, 
+            params=params, tuning=tuning, cv=cv, n_iter=n_iter, 
+            scoring=scoring, random_state=random_state, time_dep=time_dep,
+            test_phase=test_phase, d_name=d_name)
     else:
         print("Unable to find a 'good-enough' regressor.")
         print("Current regressors suck!")
 
+        tested = False
+
+    return tested
+
+
+def print_scores(best_model_name, scoring, y_test, y_pred):
+    # arguments need check
+    print()
+    print("[task] === Testing %s" % best_model_name)
+    print()
+    print(
+        "%s optimized for scoring: '%s'" 
+        % (best_model_name, scoring.replace('neg_', '')))
+    # y_test = np.array([int(yt) for yt in y_test])
+    y_test = check_array(y_test, dtype='numeric', ensure_2d=False)
+    print("y_test", y_test[0:3])
+    print("predictions", y_pred[0:3])
+    # non-numerical y objects
+    mse = me.mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    print("%s predictions' MSE [%.2f] and RMSE [%.2f] on test data" % (
+        best_model_name, mse, rmse))
+    r2 = me.r2_score(y_test, y_pred)
+    if (y_test > 0).all() and (y_pred > 0).all():
+        # you couls use custom_rms_log_err
+        rmsle = np.sqrt(me.mean_squared_log_error(y_test, y_pred))
+        print("RMSLE on test data: %.2f" % rmsle)
+    if (y_test != 0).all():
+        # rmspercerr = np.sqrt(np.mean(np.square((y_test - y_pred)/y_test)))
+        rmspercerr = reu.custom_rms_perc_err(y_test, y_pred)
+        print("RMS Percentage Error on test data: %.2f" % rmspercerr)
+    print("R2 score on test data: %.2f" % r2)
+    evs = me.explained_variance_score(y_test, y_pred)
+    print("Explained Variance score on test data: %.2f." % (evs))
+
+
+def print_oob_scores(regressor=None, y_train=None):
+    if regressor is None:
+        raise ValueError("Please provide a valid sklearn regressor.")
+    if y_train is None:
+        raise ValueError(
+                "Please provide a pandas Series or a numpy array")
+    
+    if hasattr(regressor, 'oob_prediction_'):
+        best_oob_prediction = regressor.oob_prediction_
+        mse = me.mean_squared_error(y_train, best_oob_prediction)
+        rmse = np.sqrt(mse)
+        print("oob_predictions' MSE [%.2f] and RMSE [%.2f] on train data." % (
+            mse, rmse))
+        if (y_train > 0).all() and (best_oob_prediction > 0).all():
+            # you couls use custom_rms_log_err
+            rmsle = np.sqrt(
+                me.mean_squared_log_error(y_train, best_oob_prediction))
+            print("oob RMSLE: %.2f" % rmsle)
+        if (y_train != 0).all():
+            # rmspercerr = np.sqrt(
+            #     np.mean(np.square((y_train - best_oob_prediction)/y_train)))
+            rmspercerr = reu.custom_rms_perc_err(y_train, best_oob_prediction)
+            print("oob RMS Percentage Error: %.2f" % rmspercerr)
+        evs = me.explained_variance_score(y_train, best_oob_prediction)
+        print("oob Explained Variance score on test data: %.2f" % (evs))
+    if hasattr(regressor, 'oob_score_'):
+        best_oob_score = regressor.oob_score_
+        print("R2 oob_score of refitted ensemble on train data: %1.3f" % 
+            best_oob_score)
+
 
 def train_test_estimator(
         best_model_name, best_model, X_train, X_test, y_train, y_test, 
-        y_scaler=None, params=None, tuning=None, cv=3, n_iter=10,
-        nb_epoch=100, scoring=None, random_state=0, timeseries=False):
+        scaler=None, y_scaler=None, feat_selector=None, params=None, 
+        tuning=None, cv=3, n_iter=10, nb_epoch=100, scoring=None, 
+        random_state=0, time_dep=False, test_phase=True, d_name=None):
     """
     Tests optimized or plain estimator [needs refactorization]
     
     ----------------------------------
+    test_phase: enables test phase to check best model performance, 
+                trains and saves best models if set to False 
+                (default: True) 
     """
+    if hasattr(X_train, 'values'):
+        X_train = X_train.values
+    if test_phase:
+        if hasattr(X_test, 'values'):
+            X_test = X_test.values
+
+    if hasattr(y_train, 'values'):
+        y_train = y_train.values
+    if test_phase:
+        if hasattr(y_test, 'values'):
+            y_test = y_test.values
+
+    if y_scaler is not None:    
+        y_train = y_scaler.inverse_transform(y_train)   
+        if test_phase:
+            y_test = y_scaler.inverse_transform(y_test)  
+
     print()
-    print("[task] === Model testing")
+    print("[task] === Training %s" % best_model_name)
     print()
 
-    if y_scaler is not None:
-        y_train = y_scaler.inverse_transform(y_train)
-        y_test = y_scaler.inverse_transform(y_test)
+    if best_model_name not in ("Worst", "DummyReg"):
+        
+        best_model, cv, tuning, params, poly_feats =\
+            reu.set_features_params_for_model(
+            X_train, time_dep, cv, best_model_name, best_model, tuning, 
+            params, random_state, eval_phase=False)
 
-    if best_model_name != "Worst":
-        if timeseries:
-            if isinstance(cv, TimeSeriesSplit):
-                if not is_regressor(best_model):
-                    if not isinstance(best_model, KerasRegressor):
-                        raise TypeError(
-                            "non-sklearn regressor should be of type KerasRegressor")
-            else:
-                raise TypeError(
-                    "'%r' is not a valid type for time series splitting\n"
-                    "valid type is 'sklearn.model_selection.TimeSeriesSplit'" % cv)
+        steps = []
+        reg_step = (best_model_name, best_model)
+        ppl = None
+
+        if not isinstance(test_phase, bool):
+            raise TypeError("'test_phase' should be of type bool")
+
+        if test_phase:
+            # assuming data are pre-processed
+            pass
+        elif not test_phase:
+            # train all data and save regressor along w pre-processors
+            if scaler is not None:
+                steps.append(('scaler', scaler))
+            if feat_selector is not None:
+                steps.append(('feat_selector', feat_selector))
+            if poly_feats is not None:
+                steps.append(('poly_features', poly_feats))
         else:
-            if best_model_name == 'Bagging_SVMReg':
+            raise ValueError(
+                "'test_phase' should be a bool in [True, False]")
 
-                # testing phase, ensemble of SVRr w linear kernels already setup,
-                # but you have to recreate param grid for hyperparameter opt.
-
-                best_model.set_params(kernel='linear')
-
-                n_estimators = 5
-                bagging = BaggingRegressor(
-                    best_model, max_samples=1.0/n_estimators, n_estimators=n_estimators,
-                    oob_score=True, random_state=random_state)
-
-                best_model = bagging
-
-                if tuning == 'rscv':
-                    params = {
-                        best_model_name + '__' +
-                        k: v for k, v in pgd.Bagging_param_grid.items()}
-
-            elif best_model_name == "KerasReg":
-
-                input_dim = int(X_train.shape[1])
-
-                best_model, params = create_best_keras_reg_architecture(
-                    best_model_name, input_dim, best_model.get_params()['nb_epoch'], 
-                    pgd.Keras_param_grid)
-
-                if tuning == 'rscv':
-                    for n in np.arange(0, 3):
-                        params[best_model_name + '__units_' + str(n)] = sp_randint(
-                            input_dim, 5*input_dim)
-
-            elif best_model_name == "PolynomialRidgeReg":
-
-                interact_only=False
-                if X_train.shape[0] > 100000:
-                    interact_only=True
-                poly_features = PolynomialFeatures(
-                    degree=5, interaction_only=interact_only)
-                X_train = poly_features.fit_transform(X_train)
-                X_test = poly_features.transform(X_test)
-
-            else:
-                pass
-
-        # # n_jobs=-2 to avoid burdening your PC
-        if hasattr(best_model, 'n_jobs'):
-            best_model.set_params(n_jobs=-1)
-
-        if tuning is None and params is not None:
-            print("Parameters are useless for testing default/optimized model.")
-            params = None
+        steps.append(reg_step)
+        ppl = Pipeline(steps)
 
         predicted = None
 
         if tuning is None and params is None:
             print("Fitting '%s' ..." % best_model_name)
+
             t0 = time()
-            best_model.fit(X_train, y_train)
+            ppl.fit(X_train, y_train)
             t1 = time()
-            predicted = best_model.predict(X_test)
+
+            best_model = ppl
+            del ppl
+
         elif tuning == 'rscv' and params is not None:
             # check params is a dict w tuples (model, distro_params)
             print("Find best params of %s w RSCV and refit it..." % best_model_name)
             # for k, v in params.items():
             #     print("\t", k)
-            ppl = Pipeline([(best_model_name.lstrip("Polynomial"), best_model)])
             # print(ppl.get_params().keys())
             # input("press key...")
             try:
                 # n_jobs=-2 to avoid burdening your PC
-                estimator = RandomizedSearchCV(
+                scorer = reu.get_custom_scorer(scoring, y_train)
+                random_search = RandomizedSearchCV(
                     ppl, param_distributions=params, cv=cv, iid=False, 
-                    n_iter=n_iter, n_jobs=-1, pre_dispatch="2*n_jobs", scoring=scoring, 
-                    refit=True, random_state=random_state, error_score=np.nan)  
+                    n_iter=n_iter, 
+                    scoring=scorer, 
+                    refit=True, random_state=random_state, error_score=np.nan)	
             except TypeError as te:
                 print(te)
             except Exception as e:
                 print(e)
             else:
                 t0 = time()
-                estimator.fit(X_train, y_train)
+                random_search.fit(X_train, y_train)
                 t1 = time()
 
                 # Using the score defined by scoring
-                rscv_score = estimator.score(X_train, y_train)
-                # mean_rscv_score = estimator.best_score_
+                rscv_score = random_search.score(X_train, y_train)
+                # mean_rscv_score = random_search.best_score_
 
-                if scoring == 'neg_mean_squared_error':
+                if scoring in (
+                    'neg_mean_squared_error', 'neg_rmsle', 'neg_rms_perc_err'):
                     rscv_score = -1.*rscv_score
                     # mean_rscv_score = -1.*mean_rscv_score
 
                 print("Scoring [%s] of refitted estimator on train data: %1.3f"
-                    % (scoring.strip('neg_'), rscv_score))
+                    % (scoring.replace('neg_', ''), rscv_score))
                 # print("Mean cv score [%s] of the best_estimator: %1.3f"
-                #     % (scoring.strip('neg_'), mean_rscv_score))
+                #     % (scoring.replace('neg_', ''), mean_rscv_score))
 
-                predicted = estimator.predict(X_test)
-
-                # print("best estimator: \n", estimator.best_estimator_)
-                best_regressor = estimator.best_estimator_.named_steps[
-                    best_model_name.lstrip("Polynomial")]
-
-                best_rscv_params = estimator.best_params_
-                if hasattr(best_regressor, 'oob_prediction_'):
-                    best_oob_prediction = best_regressor.oob_prediction_
-                    mse = mean_squared_error(y_train, best_oob_prediction)
-                    rmse = np.sqrt(mean_squared_error(y_train, best_oob_prediction))
-                    print("%s oob_predictions' MSE [%.2f] and RMSE [%.2f] on train data." % (
-                        best_model_name, mse, rmse))
-                if hasattr(best_regressor, 'oob_score_'):
-                    best_oob_score = best_regressor.oob_score_
-                    print("oob_score [%s] of refitted ensemble on train data: %1.3f" % (
-                        scoring.strip('neg_'), best_oob_score))
+                print("best estimator: \n", random_search.best_estimator_)
+                # best_regressor = random_search.best_estimator_.named_steps[
+                #     best_model_name.replace("Polynomial", "")]
+                best_regressor = random_search.best_estimator_
+                # input("Press key to continue...")
+                
+                print_oob_scores(best_regressor, y_train)
 
                 print()
-                # as a check for fitting the same estimator
+
+                # as a check for not fitting the input estimator
+                # 
+                # best_rscv_params = random_search.best_params_
                 # print("Best estimator has params:\n")
                 # for param_name in sorted(best_rscv_params.keys()):
                 #     print("\t%s: %r" % (param_name, best_rscv_params[param_name]))
                 # print()
 
-                best_model_params = {
-                    k.split('__')[1]: v for k, v in best_rscv_params.items()
-                }
+                # best_model_params = {
+                #     k.split('__')[1]: v for k, v in best_rscv_params.items()
+                # }
 
-                best_model.set_params(**best_model_params)
+                best_model = best_regressor
+                del best_regressor
         elif tuning == 'rscv' and params is None:
             raise ValueError("rscv hyperparameter opt requires parameters dict.")
         else:
@@ -224,19 +280,25 @@ def train_test_estimator(
         for param_name in sorted(params.keys()):
             print("\t%s: %r" % (param_name, params[param_name]))
         print()
-        # y_test = np.array([int(yt) for yt in y_test])
-        y_test = check_array(y_test, dtype='numeric', ensure_2d=False)
-        print("y_test", y_test[0:3])
-        print("predictions", predicted[0:3])
-        # non-numerical y objects
-        mse = mean_squared_error(y_test, predicted)
-        rmse = np.sqrt(mean_squared_error(y_test, predicted))
-        print("%s predictions' MSE [%.2f] and RMSE [%.2f] on test data" % (
-            best_model_name, mse, rmse))
-        r2 = r2_score(y_test, predicted)
-        print("R2 score on test data: %.2f" % (r2))
-        evs = explained_variance_score(y_test, predicted)
-        print("Explained Variance score on test data: %.2f." % (evs))
-        print('Execution time for %s: %.2fs.' % (best_model_name, t1 - t0))
+
+        if test_phase:
+            predicted = best_model.predict(X_test)
+            print_scores(best_model_name, scoring, y_test, predicted)
+            print('Execution time for %s: %.2fs.' % (best_model_name, t1 - t0))
+        else:
+            print(
+                "%s trained and ready to make predictions on unseen data."
+                % best_model_name)
+
+            # print("Pipeline:\n")
+            # print(ppl)
+            # input("Press key to continue...")
+
+            reu.save_regressor(
+                best_model, name=best_model_name, d_name=d_name, tuning=tuning)
+    else:
+        print("Current regressors suck, training not worth the effort :)")
 
     print()
+
+    return test_phase, best_model

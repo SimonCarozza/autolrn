@@ -17,11 +17,11 @@ if __name__ == "__main__":
     seed = 7
     np.random.seed(seed)
 
+    d_name = "rossmann"
+
     # names = [
     #     "Store","DayOfWeek","Date","Sales","Customers","Open",
     #     "Promo","StateHoliday","SchoolHoliday"]
-
-    # StateHoliday     category
 
     # load data
     ross_bytes = resource_string(
@@ -77,11 +77,17 @@ if __name__ == "__main__":
     print()
     print(df[df["Open"] == '0'].head())
     print(len(df[df["Open"] == '0'].index))
-    # # drop rows with closed shops
-    # df = df[df["Open"] != '0']
-    # # drop column with store nr. which is pointless
-    # df.drop(["Store", "Open"], axis=1, inplace=True)
-    df.drop(["Store"], axis=1, inplace=True)
+
+    scoring = "r2" # 'neg_mean_squared_error', 'r2'
+
+    # adding 'has_Sales' col
+    if (df["Open"] == '0').any():
+        # keeping zero sales records
+        df['has_Sales'] = 1
+        print("Some record has zero sale")
+        # you don't have a target in unseen data
+        # df['has_Sales'][df[target] == '0'] = 0
+        df.loc[df["Open"] == '0', 'has_Sales'] = 0
 
     print()
     print("df shape after little cleaning: ", df.shape)
@@ -114,17 +120,18 @@ if __name__ == "__main__":
         encoding=encoding, freqs=freqs, 
         # dummy_cols=7, # 31, 52 
         test_size=test_size, 
-        shuffle=False)
+        shuffle=False, scoring=scoring)
 
     X_train, X_test, y_train, y_test = splitted_data["data"]
-    tgt_scaler = splitted_data["scalers"][1]
+    scaler, tgt_scaler = splitted_data["scalers"]
+    featselector = None
+    if 'f_selector' in splitted_data:
+        featselector = splitted_data["f_selector"]
 
     print()
 
     tscv = TimeSeriesSplit(n_splits=2)
     # cv = tscv
-
-    scoring = "r2" # 'neg_mean_squared_error'
 
     estimators = dict(pgd.full_search_models_and_parameters)
 
@@ -132,17 +139,27 @@ if __name__ == "__main__":
     input_dim = int(X_train.shape[1])
     nb_epoch = au.select_nr_of_iterations('nn')
 
-    keras_reg_name = "KerasReg"
+    refit, nested_cv, tuning = eu.select_cv_process(cv_proc='cv')
 
-    keras_nn_model, keras_param_grid = reu.create_best_keras_reg_architecture(
-        keras_reg_name, input_dim, nb_epoch, pgd.Keras_param_grid)
+    print(
+        "refit:'%s', nested_cv:'%s', tuning:'%s'" % (refit, nested_cv, tuning))
 
-    # print()
-    # print("KerasReg:\n", keras_nn_model)
-    # print("Keras Params:\n", keras_param_grid)
+    if refit:
+
+        # This is gonna work even with no prior optimization
+
+        keras_reg_name = "KerasReg"
+        keras_nn_model, keras_param_grid = reu.create_best_keras_reg_architecture(
+            keras_reg_name, input_dim, nb_epoch, pgd.Keras_param_grid)
+
+        estimators[keras_reg_name] = (keras_nn_model, keras_param_grid)
+
+    else:
+
+        keras_regressors = reu.create_keras_regressors(input_dim, nb_epoch, batch_size=32)
+        estimators.update(keras_regressors)
+
     print()
-
-    estimators[keras_reg_name] = (keras_nn_model, keras_param_grid)
 
     print("[task] === Model evaluation")
     print("*** Best model %s has score %.3f +/- %.3f" % (
@@ -156,20 +173,47 @@ if __name__ == "__main__":
     # cv_proc in ['cv', 'non_nested', 'nested']
     refit, nested_cv, tuning = eu.select_cv_process(cv_proc='cv')
 
-    best_model_name, _ , _ , _ = eu.get_best_regressor_attributes(
+    best_model_name, _, _ , _ = eu.get_best_regressor_attributes(
         X_train, y_train, estimators, best_attr, scoring, 
         refit=refit, nested_cv=nested_cv,
         cv=tscv, time_dep=True, random_state=seed)
 
-    # best_model_name = best_reg_attributes[0]
-    # best_model = best_reg_attributes[1]   
-    # best_reg_score = best_reg_attributes[2]
-    # best_reg_std = best_reg_attributes[3]
+    time_dep=True  
+    print("set time_dep=%s" % time_dep)
 
-    tr.train_test_process(
+	# train phase, no saving: scaler and featselector are useless
+    tested = tr.train_test_process(
         best_model_name, estimators, X_train, X_test, y_train, y_test,
-        y_scaler=tgt_scaler, tuning=tuning, cv=tscv, scoring='r2', 
-        random_state=seed)
+        scaler=scaler, y_scaler=tgt_scaler, feat_selector=featselector, 
+        tuning=tuning, cv=tscv, scoring=scoring, random_state=seed, 
+        time_dep=time_dep)
+
+    # if a best model has been successfully tested, proceed to full training
+    # for prediction on unseen data
+    if tested:
+        print()
+        print("[task] === Train %s for predictions on unseen data" % best_model_name)
+
+        X_train = X
+        y_train = y
+
+        del X, y
+
+        encoded_data = reu.split_and_encode_Xy(
+        X_train, y_train, encoding='le', feat_select=True, enc_Xy=True, 
+        scoring=scoring)
+
+        X_train, _, y_train, _ = encoded_data["data"] 
+        scaler, tgt_scaler = encoded_data["scalers"]
+        featselector = None
+        if 'f_selector' in splitted_data:
+            featselector = splitted_data["f_selector"]
+
+        tr.train_test_process(
+            best_model_name, estimators, X_train, X_test, y_train, y_test,
+            scaler=scaler, y_scaler=tgt_scaler, feat_selector=featselector, 
+            tuning=tuning, cv=tscv, scoring=scoring, random_state=seed, 
+            time_dep=time_dep, test_phase=False, d_name=d_name)
 
     print()
     print("End of program\n")

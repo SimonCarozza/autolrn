@@ -25,6 +25,8 @@ if __name__ == "__main__":
     url = "https://goo.gl/sXleFv"
     df = read_csv(url, delim_whitespace=True, names=names)
 
+    d_name = "bostonhse"
+
     # load data
     
     print(df.shape)
@@ -63,36 +65,54 @@ if __name__ == "__main__":
     test_size = .15
 
     splitted_data = reu.split_and_encode_Xy(
-        X, y, encoding='le', test_size=test_size, f_sel=True)
+        X, y, encoding='le', test_size=test_size, feat_select=True)
 
     X_train, X_test, y_train, y_test = splitted_data["data"]
-    tgt_scaler = splitted_data["scalers"][1]
+    scaler, tgt_scaler = splitted_data["scalers"]
+    featselector = None
+    if 'f_selector' in splitted_data:
+        featselector = splitted_data["f_selector"]
 
     print()
 
-    # kfold =  KFold(n_splits=3, shuffle=True, random_state=seed)
+    # kfold =  KFold(n_splits=5, shuffle=True, random_state=seed)
     # cv = kfold
 
-    scoring = "r2" # 'neg_mean_squared_error'
+    scoring = "neg_mean_squared_error" # 'neg_mean_squared_error', 'r2'
 
     estimators = dict(pgd.full_search_models_and_parameters)
 
-    # This is gonna work even with no prior optimization
+    # cv_proc in ['cv', 'non_nested', 'nested']
+    refit, nested_cv, tuning = eu.select_cv_process(cv_proc='nested')
 
+    print(
+        "refit:'%s', nested_cv:'%s', tuning:'%s'" % (refit, nested_cv, tuning))
+
+    n_iters = 15
     input_dim = int(X_train.shape[1])
     nb_epoch = au.select_nr_of_iterations('nn')
 
-    keras_reg_name = "KerasReg"
+    if refit:
 
-    keras_nn_model, keras_param_grid = reu.create_best_keras_reg_architecture(
-        keras_reg_name, input_dim, nb_epoch, pgd.Keras_param_grid)
+        # This is gonna work even with no prior optimization
 
-    # print()
-    # print("KerasReg:\n", keras_nn_model)
-    # print("Keras Params:\n", keras_param_grid)
+        keras_reg_name = "KerasReg"
+        keras_nn_model, keras_param_grid = reu.create_best_keras_reg_architecture(
+            keras_reg_name, input_dim, nb_epoch, pgd.Keras_param_grid)
+
+        # uncomment to see KerasRegressor's parameters
+        # print()
+        # print("KerasReg:\n", keras_nn_model)
+        # print("Keras Params:\n", keras_param_grid)
+        # print()
+        estimators[keras_reg_name] = (keras_nn_model, keras_param_grid)
+
+    else:
+
+        keras_regressors = reu.create_keras_regressors(input_dim, nb_epoch, batch_size=32)
+        estimators.update(keras_regressors)
+
     print()
-
-    estimators[keras_reg_name] = (keras_nn_model, keras_param_grid)
 
     print("[task] === Model evaluation")
     print("*** Best model %s has score %.3f +/- %.3f" % (
@@ -104,24 +124,73 @@ if __name__ == "__main__":
         'DummyReg', DummyRegressor(strategy="median"), 
         X_train, y_train, 3, scoring, best_attr)
 
-    # cv_proc in ['cv', 'non_nested', 'nested']
-    refit, nested_cv, tuning = eu.select_cv_process(cv_proc='cv')
-
-    print(
-        "refit:'%s', nested_cv:'%s', tuning:'%s'" % (refit, nested_cv, tuning))
-
     best_reg_attributes = eu.get_best_regressor_attributes(
         X_train, y_train, estimators, best_attr, scoring, 
         refit=refit, nested_cv=nested_cv, random_state=seed)
 
     best_model_name = best_reg_attributes[0]
+    # best_model = best_reg_attributes[1]   
+    # best_reg_score = best_reg_attributes[2]
+    # best_reg_std = best_reg_attributes[3]
 
     print()
+    print()
 
-    # tuning == 'rscv' by default
-    tr.train_test_process(
-        best_model_name, estimators, X_train, X_test, y_train, y_test,
-        y_scaler=tgt_scaler, tuning=tuning, scoring='r2', random_state=seed)
+    # training-testing process
+    if best_model_name not in ('Worst', 'DummyReg'):
+        # test best model/estimator
+
+        best_model = estimators[
+            'SVMReg' if best_model_name=='Bagging_SVMReg' else 
+            best_model_name][0]
+        if tuning=='rscv':
+                params = estimators[
+                'SVMReg' if best_model_name=='Bagging_SVMReg' else 
+                best_model_name][1]
+
+        if best_model_name == "PolynomialRidgeReg":
+                parameters = estimators["RidgeReg"][1]
+        else:
+                parameters = estimators[best_model_name][1]
+
+        tested, _ = tr.train_test_estimator(
+            best_model_name, best_model, 
+            X_train, X_test, y_train, y_test, y_scaler=tgt_scaler,
+            params=parameters, tuning=tuning, n_iter=n_iters, 
+            scoring=scoring, random_state=seed)
+
+        # if a best model has been successfully tested, proceed to full training
+        # for prediction on unseen data
+        if tested:
+            print()
+            print("[task] === Train %s for predictions on unseen data" 
+                  % best_model_name)
+
+            X_train = X
+            y_train = y
+
+            del X, y
+
+            encoded_data = reu.split_and_encode_Xy(
+            X_train, y_train, encoding='le', feat_select=True, enc_Xy=True, 
+            scoring=scoring)
+
+            X_train, _, y_train, _ = encoded_data["data"] 
+            scaler, tgt_scaler = encoded_data["scalers"]
+            featselector = None
+            if 'f_selector' in splitted_data:
+                featselector = splitted_data["f_selector"]
+
+            # this is going to save a pipeline including pre-processors
+            tr.train_test_estimator(
+                best_model_name, best_model, 
+                X_train, _, y_train, _, scaler=scaler, y_scaler=tgt_scaler,
+                feat_selector=featselector, params=parameters, tuning=tuning, 
+                scoring=scoring, random_state=seed, test_phase=False, 
+                d_name=d_name)
+    else:
+        print("Unable to find a 'good-enough' regressor.")
+        print("Current regressors suck!")
 
     print()
     print("End of program\n")

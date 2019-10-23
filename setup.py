@@ -15,7 +15,7 @@ if sys.version_info < req_version:
 
 setup(
     name="autolrn",
-    version="0.1.2",
+    version="0.1.3",
     author="Simon Carozza",
     author_email="simoncarozza@gmail.com",
     description="A tabular data classifier/regressor",

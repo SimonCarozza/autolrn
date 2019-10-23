@@ -32,6 +32,7 @@ parser.add_argument("--npset", nargs=1, type=int,
 parser.add_argument("--nepoch", nargs="+", type=int,
     help="Number of epochs to train Keras NNs")
 args = parser.parse_args([])
+# args, _ = parser.parse_known_args()
 
 
 def get_args():
@@ -157,7 +158,7 @@ def get_n_epoch():
                 print("We set n_epoch = 1000 for you.")
                 print()
             n_epoch.append(ep)
-
+            
         n_epoch_list = n_epoch
 
     return n_epoch_list

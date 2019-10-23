@@ -1,6 +1,6 @@
 package:
   name: autolrn
-  version: "0.1.2"
+  version: "0.1.3"
 
 source:
   git_url: https://simoneci@bitbucket.org/simoneci/auto_learn.git

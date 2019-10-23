@@ -156,13 +156,11 @@ def get_dummies_or_label_encode(df, target=None, dummy_cols=10, ohe_dates=False)
         new_df = df[target].to_frame(name=target)
         cols = df.drop([target], axis=1).columns
 
-    print()
-    print("New df's columns:\n", cols)
-    print()
+    # print()
+    # print("New df's columns:\n", cols)
+    # print()
 
     original_length = len(df.index)
-
-    # column_types = ('str', 'object', 'category', 'datetime64')
 
     columns_to_encode = list(
         df.select_dtypes(include=['category', 'object', 'int64']))
@@ -172,7 +170,7 @@ def get_dummies_or_label_encode(df, target=None, dummy_cols=10, ohe_dates=False)
         if df[feature].dtype in (np.int64, 'object'):
             col = col.astype('category')
         nr_uniques = len(col.unique())
-        print("%s's nr_uniques:" % feature, nr_uniques)
+        # print("%s's nr_uniques:" % feature, nr_uniques)
         # if df[feature].dtype.name in column_types:
         if feature in columns_to_encode:
             try:
@@ -239,9 +237,9 @@ def get_dummies_or_label_encode(df, target=None, dummy_cols=10, ohe_dates=False)
     print()
     print("New final df's head:\n", new_df.head(3))
     print("New df's tail:\n", new_df.tail(3))
-    print("New df's columns:", list(new_df.columns))
-    print("New df's length:", len(new_df.index))
-    print("Old df's length:", original_length)
+    # print("New df's columns:", list(new_df.columns))
+    # print("New df's length:", len(new_df.index))
+    # print("Old df's length:", original_length)
 
     return new_df
 
