@@ -14,23 +14,23 @@ from sklearn.base import is_regressor
 
 
 def train_test_process(
-    best_model_name, estimators, X_train, X_test, y_train, y_test, 
-    scaler=None, y_scaler=None, feat_selector=None, tuning='rscv', cv=3, 
-    n_iter=10, nb_epoch=100, scoring='r2', random_state=0, time_dep=False, 
+    best_model_name, estimators, X_train, X_test, y_train, y_test,
+    scaler=None, y_scaler=None, feat_selector=None, tuning='rscv', cv=3,
+    n_iter=10, nb_epoch=100, scoring='r2', random_state=0, time_dep=False,
     test_phase=True, d_name=None):
 
     tested = True
-       
+
     # should check best model is in list of valid models...
     if best_model_name not in ('Worst', 'DummyReg'):
         # test best model/estimator
         best_model = estimators[
-            'SVMReg' if best_model_name=='Bagging_SVMReg' else 
+            'SVMReg' if best_model_name=='Bagging_SVMReg' else
             best_model_name][0]
         params=None
         try:
             estimators[
-                'SVMReg' if best_model_name=='Bagging_SVMReg' else 
+                'SVMReg' if best_model_name=='Bagging_SVMReg' else
                 best_model_name][1]
         except KeyError as ke:
             if best_model_name == "PolynomialRidgeReg":
@@ -49,13 +49,13 @@ def train_test_process(
         else:
             if tuning=='rscv':
                 params = estimators[
-                'SVMReg' if best_model_name=='Bagging_SVMReg' else 
+                'SVMReg' if best_model_name=='Bagging_SVMReg' else
                 best_model_name][1]
 
         tested, _ =  train_test_estimator(
             best_model_name, best_model, X_train, X_test, y_train, y_test,
-            scaler=scaler, feat_selector=feat_selector, y_scaler=y_scaler, 
-            params=params, tuning=tuning, cv=cv, n_iter=n_iter, 
+            scaler=scaler, feat_selector=feat_selector, y_scaler=y_scaler,
+            params=params, tuning=tuning, cv=cv, n_iter=n_iter,
             scoring=scoring, random_state=random_state, time_dep=time_dep,
             test_phase=test_phase, d_name=d_name)
     else:
@@ -73,7 +73,7 @@ def print_scores(best_model_name, scoring, y_test, y_pred):
     print("[task] === Testing %s" % best_model_name)
     print()
     print(
-        "%s optimized for scoring: '%s'" 
+        "%s optimized for scoring: '%s'"
         % (best_model_name, scoring.replace('neg_', '')))
     # y_test = np.array([int(yt) for yt in y_test])
     y_test = check_array(y_test, dtype='numeric', ensure_2d=False)
@@ -104,7 +104,7 @@ def print_oob_scores(regressor=None, y_train=None):
     if y_train is None:
         raise ValueError(
                 "Please provide a pandas Series or a numpy array")
-    
+
     if hasattr(regressor, 'oob_prediction_'):
         best_oob_prediction = regressor.oob_prediction_
         mse = me.mean_squared_error(y_train, best_oob_prediction)
@@ -125,22 +125,22 @@ def print_oob_scores(regressor=None, y_train=None):
         print("oob Explained Variance score on test data: %.2f" % (evs))
     if hasattr(regressor, 'oob_score_'):
         best_oob_score = regressor.oob_score_
-        print("R2 oob_score of refitted ensemble on train data: %1.3f" % 
+        print("R2 oob_score of refitted ensemble on train data: %1.3f" %
             best_oob_score)
 
 
 def train_test_estimator(
-        best_model_name, best_model, X_train, X_test, y_train, y_test, 
-        scaler=None, y_scaler=None, feat_selector=None, params=None, 
-        tuning=None, cv=3, n_iter=10, nb_epoch=100, scoring=None, 
+        best_model_name, best_model, X_train, X_test, y_train, y_test,
+        scaler=None, y_scaler=None, feat_selector=None, params=None,
+        tuning=None, cv=3, n_iter=10, nb_epoch=100, scoring=None,
         random_state=0, time_dep=False, test_phase=True, d_name=None):
     """
     Tests optimized or plain estimator [needs refactorization]
-    
+
     ----------------------------------
-    test_phase: enables test phase to check best model performance, 
-                trains and saves best models if set to False 
-                (default: True) 
+    test_phase: enables test phase to check best model performance,
+                trains and saves best models if set to False
+                (default: True)
     """
     if hasattr(X_train, 'values'):
         X_train = X_train.values
@@ -154,20 +154,20 @@ def train_test_estimator(
         if hasattr(y_test, 'values'):
             y_test = y_test.values
 
-    if y_scaler is not None:    
-        y_train = y_scaler.inverse_transform(y_train)   
+    if y_scaler is not None:
+        y_train = y_scaler.inverse_transform(y_train)
         if test_phase:
-            y_test = y_scaler.inverse_transform(y_test)  
+            y_test = y_scaler.inverse_transform(y_test)
 
     print()
     print("[task] === Training %s" % best_model_name)
     print()
 
     if best_model_name not in ("Worst", "DummyReg"):
-        
+
         best_model, cv, tuning, params, poly_feats =\
             reu.set_features_params_for_model(
-            X_train, time_dep, cv, best_model_name, best_model, tuning, 
+            X_train, time_dep, cv, best_model_name, best_model, tuning,
             params, random_state, eval_phase=False)
 
         steps = []
@@ -218,10 +218,10 @@ def train_test_estimator(
                 # n_jobs=-2 to avoid burdening your PC
                 scorer = reu.get_custom_scorer(scoring, y_train)
                 random_search = RandomizedSearchCV(
-                    ppl, param_distributions=params, cv=cv, iid=False, 
-                    n_iter=n_iter, 
-                    scoring=scorer, 
-                    refit=True, random_state=random_state, error_score=np.nan)	
+                    ppl, param_distributions=params, cv=cv, iid=False,
+                    n_iter=n_iter,
+                    scoring=scorer,
+                    refit=True, random_state=random_state, error_score=np.nan)
             except TypeError as te:
                 print(te)
             except Exception as e:
@@ -249,14 +249,13 @@ def train_test_estimator(
                 # best_regressor = random_search.best_estimator_.named_steps[
                 #     best_model_name.replace("Polynomial", "")]
                 best_regressor = random_search.best_estimator_
-                # input("Press key to continue...")
-                
+
                 print_oob_scores(best_regressor, y_train)
 
                 print()
 
                 # as a check for not fitting the input estimator
-                # 
+                #
                 # best_rscv_params = random_search.best_params_
                 # print("Best estimator has params:\n")
                 # for param_name in sorted(best_rscv_params.keys()):

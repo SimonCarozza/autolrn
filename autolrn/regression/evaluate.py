@@ -57,7 +57,7 @@ def manual_parallel_cv(cv):
     return [train_scores, test_scores]
 
 
-# if you have evaluation fcts internally define 'refit', 'nested_cv', 
+# if you have evaluation fcts internally define 'refit', 'nested_cv',
 # 'tuning' based on cv_proc value, then you can get rid of this method
 def select_cv_process(cv_proc='cv'):
     refit, nested_cv, tuning = False, False, None
@@ -71,9 +71,9 @@ def select_cv_process(cv_proc='cv'):
         refit, nested_cv, tuning = True, True, 'rscv'
     else:
         raise ValueError("'%s' is not a valid value for 'cv_prov',\n"
-                         "valid values are ['cv', 'non_nested', 'nested']" 
+                         "valid values are ['cv', 'non_nested', 'nested']"
                          % cv_proc)
-    
+
     return refit, nested_cv, tuning
 
 
@@ -81,7 +81,7 @@ def select_cv_process(cv_proc='cv'):
 # make sure you're passing KerasRegressor instances
 
 def evaluate_regressor(
-    name, regressor, X_train, y_train, cv=3, scoring=None, best_attr=None, 
+    name, regressor, X_train, y_train, cv=3, scoring=None, best_attr=None,
     time_dep=False, refit=False, nested_cv=False, results=None):
 
     if scoring not in (
@@ -100,7 +100,7 @@ def evaluate_regressor(
         X_train = X_train.values
     if hasattr(y_train, 'values'):
         y_train = y_train.values
-    
+
     print("Evaluating %s ..." % name)
 
     # print("Estimator", estimator)
@@ -123,7 +123,7 @@ def evaluate_regressor(
                         print("Oops, %r type." % regressor)
                         raise TypeError(
                             "non-sklearn regressor should be of type KerasRegressor")
-    
+
     train_score, train_score_std, score_std, score = 0., 0., 0., 0.
     exec_time = 0.
     success = 0
@@ -138,8 +138,8 @@ def evaluate_regressor(
             t0 = time()
             results = cross_validate(
                 regressor, X_train, y_train, cv=cv, n_jobs=-1,
-                return_train_score=True, 
-                pre_dispatch='2*n_jobs', 
+                return_train_score=True,
+                pre_dispatch='2*n_jobs',
                 scoring=scorer,
                 error_score='raise'
                 )
@@ -153,7 +153,7 @@ def evaluate_regressor(
 
                 t0 = time()
                 results = {
-                    "train_score": results["mean_train_score"], 
+                    "train_score": results["mean_train_score"],
                     "std_train_score": results["std_train_score"],
                     "test_score": results["mean_test_score"],
                     "std_test_score": results["std_test_score"],
@@ -231,8 +231,8 @@ def evaluate_regressor(
 
 
 def get_best_regressor_attributes(
-    X_train, y_train, estimators, best_attr=None, scoring=None, 
-    nested_cv=False, cv=3, tuning='rscv', n_iter=10, refit=True, 
+    X_train, y_train, estimators, best_attr=None, scoring=None,
+    nested_cv=False, cv=3, tuning='rscv', n_iter=10, refit=True,
     time_dep=False, random_state=0):
 
     if scoring not in (
@@ -266,7 +266,7 @@ def get_best_regressor_attributes(
         print("*** Nested rscv: evaluate rscv objects w cv")
     print()
 
-    if "RidgeReg" in estimators.keys(): 
+    if "RidgeReg" in estimators.keys():
         if X_train.shape[1] < 15 and X_train.shape[0] < 500000:
             print("Found RidgeReg model, creating a polynomial out of it...")
             poly_dict = {"PolynomialRidgeReg": (
@@ -278,7 +278,7 @@ def get_best_regressor_attributes(
 
     X_train_temp = None
 
-    for name, (model, params) in estimators.items():            
+    for name, (model, params) in estimators.items():
         try:
             model, cv, tuning, params, poly_feats =\
             reu.set_features_params_for_model(
@@ -305,10 +305,10 @@ def get_best_regressor_attributes(
 
                 scorer = reu.get_custom_scorer(scoring, y_train)
                 random_search = RandomizedSearchCV(
-                    ppl, param_distributions=params, cv=cv, iid=False, 
-                    n_iter=n_iter, 
+                    ppl, param_distributions=params, cv=cv, iid=False,
+                    n_iter=n_iter,
                     scoring=scorer,
-                    refit=refit, 
+                    refit=refit,
                     # verbose=2,
                     random_state=random_state, error_score=np.nan)
             except AttributeError as ae:
@@ -336,9 +336,9 @@ def get_best_regressor_attributes(
                         model = random_search.best_estimator_.get_params()[
                             name.replace("Polynomial", "")]
                         results = random_search.cv_results_
-                        results["total_time"] = np.sum(results["mean_fit_time"]) 
+                        results["total_time"] = np.sum(results["mean_fit_time"])
                         + random_search.refit_time_
-                else: 
+                else:
                     success = 1
                     # nested_cv = True
                     # print("Running nested cv...")
@@ -348,7 +348,7 @@ def get_best_regressor_attributes(
 
         if success:
             best_attr = evaluate_regressor(
-                name, model, X_train, y_train, cv, scoring, best_attr, time_dep, 
+                name, model, X_train, y_train, cv, scoring, best_attr, time_dep,
                 refit, nested_cv, results)
 
         if name == "PolynomialRidgeReg":
